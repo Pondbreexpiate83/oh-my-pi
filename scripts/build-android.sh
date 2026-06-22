@@ -11,7 +11,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-# 1. Apply patches on top of the upstream commit.
+# 1. Ensure working tree is at HEAD (in case a prior CI run left it patched).
+git checkout HEAD -- .
+
+# 2. Apply patches on top of the upstream commit.
 git apply --check patches/[0-9][0-9]-*.patch
 git apply patches/[0-9][0-9]-*.patch
 trap 'git apply -R patches/[0-9][0-9]-*.patch || true' EXIT
