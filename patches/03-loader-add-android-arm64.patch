@@ -1,8 +1,6 @@
-diff --git a/packages/natives/native/loader-state.js b/packages/natives/native/loader-state.js
-index 3d550e0d..4dc5883e 100644
 --- a/packages/natives/native/loader-state.js
 +++ b/packages/natives/native/loader-state.js
-@@ -31,7 +31,7 @@ import { embeddedAddon } from "./embedded-addon.js";
+@@ -31,7 +31,7 @@
   * post-build `--reset` stub) is the authoritative compiled-mode signal.
   */
  
