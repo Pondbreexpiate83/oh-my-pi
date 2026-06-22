@@ -34,9 +34,19 @@ jobs:
           version: 0.13.0
 
       - name: Install Rust (stable)
+        # The repo pins to nightly via rust-toolchain.toml; dtolnay's
+        # action's `targets:` input is ignored for non-stable toolchains.
+        # We install stable first to get rustup, then override the
+        # active toolchain to the pinned nightly and add the target.
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+
+      - name: Activate repo-pinned nightly and add Android target
+        run: |
+          rustup show 2>&1 | head -20
+          ACTIVE=$(rustup show active-toolchain | awk '{print $1}')
+          echo "Active toolchain: $ACTIVE"
+          rustup target add aarch64-linux-android --toolchain "$ACTIVE"
+          rustc +"$ACTIVE" --print target-list | grep aarch64-linux-android || true
 
       - name: Install cargo-zigbuild
         run: cargo install --locked cargo-zigbuild
