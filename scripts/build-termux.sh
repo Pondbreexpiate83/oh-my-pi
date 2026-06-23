@@ -58,6 +58,11 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page
 
 # Build. Use --profile local (lto=thin, codegen-units=16) to keep memory
 # pressure reasonable on a phone. Full release (lto=fat) can OOM on 4 GB devices.
+# Termux defaults to all-cores which is too aggressive on phones (OOMs);
+# cap at 2 jobs. Override with CARGO_BUILD_JOBS if you have more RAM.
+CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+export CARGO_BUILD_JOBS
+
 cargo build \
 	--target aarch64-linux-android \
 	--profile local \

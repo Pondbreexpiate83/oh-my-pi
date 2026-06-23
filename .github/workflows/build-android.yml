@@ -1,0 +1,99 @@
+name: build-android
+
+on:
+  push:
+    branches: [android-direct, android-port]
+    paths:
+      - 'crates/pi-natives/**'
+      - 'crates/pi-shell/**'
+      - 'crates/pi-iso/**'
+      - 'crates/pi-ast/**'
+      - 'packages/natives/native/**'
+      - 'scripts/build-android.sh'
+      - '.github/workflows/build-android.yml'
+  pull_request:
+    branches: [android-direct, android-port]
+  workflow_dispatch:
+    inputs:
+      ndk_version:
+        description: 'NDK version to use (default: r27d)'
+        required: false
+        default: 'r27d'
+
+# Cancel in-flight runs for the same branch when a new commit lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # needed to attach to releases (and the checkout step)
+
+jobs:
+  build:
+    name: build pi_natives.android-arm64.node
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ANDROID_NDK_ROOT: /opt/hostedtoolcache/ndk/${{ inputs.ndk_version || 'r27d' }}/x64
+      CARGO_HOME: ${{ runner.workspace }}/.cargo
+      RUSTUP_HOME: ${{ runner.workspace }}/.rustup
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need enough history for the version sentinel derivation later.
+          fetch-depth: 0
+
+      - name: Show tool versions (for debug)
+        run: |
+          set -x
+          rustc --version
+          cargo --version
+          clang --version | head -1
+          ls -la "${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+
+      - name: Install Rust target
+        run: |
+          rustup target add aarch64-linux-android
+        # The active toolchain here is stable; cargo will pull the target's
+        # rust-std automatically. The build script ALSO does this defensively
+        # in case it ever runs against a non-default toolchain.
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cargo/registry
+            .cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build
+        run: scripts/build-android.sh
+
+      - name: "Smoke: file type"
+        run: file packages/natives/native/pi_natives.android-arm64.node
+
+      - name: "Smoke: exported sentinel"
+        run: |
+          set -e
+          # Derive the expected sentinel name from the package version, exactly
+          # as the Rust source does (see crates/pi-natives/src/lib.rs).
+          # The sentinel is `__piNativesV{major}_{minor}_{patch}`.
+          VERSION="$(awk -F'"' '/"version"/{print $4; exit}' packages/natives/package.json)"
+          EXPECTED="__piNativesV${VERSION//[^A-Za-z0-9]/_}"
+          echo "Looking for sentinel: ${EXPECTED}"
+          if ! nm -D packages/natives/native/pi_natives.android-arm64.node | grep -q "${EXPECTED}"; then
+            echo "ERROR: sentinel ${EXPECTED} not found in prebuilt .node" >&2
+            nm -D packages/natives/native/pi_natives.android-arm64.node | head -20 >&2
+            exit 1
+          fi
+          echo "Sentinel ${EXPECTED} is exported."
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi_natives-android-arm64
+          path: |
+            packages/natives/native/pi_natives.android-arm64.node
+            packages/natives/native/pi_natives.android-arm64.node.sha256
