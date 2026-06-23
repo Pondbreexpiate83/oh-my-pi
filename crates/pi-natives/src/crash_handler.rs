@@ -30,10 +30,7 @@ use std::{
 	io::Write as _,
 	path::{Path, PathBuf},
 	process,
-	sync::{
-		Once,
-		atomic::{AtomicBool, Ordering},
-	},
+	sync::Once,
 	thread,
 	time::{SystemTime, UNIX_EPOCH},
 };
@@ -48,7 +45,6 @@ const DEFAULT_CONFIG_DIR: &str = ".omp";
 const APP_NAME: &str = "omp";
 
 static INSTALL: Once = Once::new();
-static ALLOC_HOOK_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Install the panic and allocation-error hooks. Idempotent.
 pub fn install() {
@@ -60,19 +56,9 @@ pub fn install() {
 			prev_panic(info);
 		}));
 
-		std::alloc::set_alloc_error_hook(|layout| {
-			// Print the canonical line before doing anything allocation-prone.
-			// If this is genuine process-wide OOM, report formatting/path work may
-			// recursively enter this hook; the secondary entry writes the same
-			// stack-only fallback and aborts immediately.
-			write_alloc_failure_line(std::io::stderr(), layout.size());
-			if ALLOC_HOOK_ACTIVE.swap(true, Ordering::AcqRel) {
-				process::abort();
-			}
-			let report = format_alloc_report(layout);
-			persist(&report, CrashKind::Alloc);
-			process::abort();
-		});
+		// alloc hook disabled on bionic: nightly-only feature(alloc_error_hook)
+		// was removed; we accept reduced OOM diagnostics in exchange for
+		// stable-Rust builds on Termux.
 	});
 }
 
